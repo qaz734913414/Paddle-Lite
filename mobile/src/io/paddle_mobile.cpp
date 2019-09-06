@@ -20,7 +20,7 @@ limitations under the License. */
 #endif  // _OPENMP
 #ifdef PADDLE_MOBILE_CL
 #include <CL/cl.h>
-#include <mutex>
+#include <mutex>  // NOLINT
 #include "framework/cl/cl_engine.h"
 #include "framework/cl/cl_tensor.h"
 #endif
@@ -63,6 +63,7 @@ PMStatus PaddleMobile<Device, T>::Load(const std::string &model_path,
   if (loader_.get() == nullptr) {
     loader_ = std::make_shared<framework::Loader<Device, T>>();
   } else {
+    LOG(kLOG_INFO) << "loader inited";
     LOG(kLOG_INFO) << "loader inited";
   }
 
@@ -186,6 +187,14 @@ void PaddleMobile<Device, T>::Clear() {
 
 template <typename Device, typename T>
 double PaddleMobile<Device, T>::GetPredictTime() {}
+
+template <typename Device, typename T>
+std::string PaddleMobile<Device, T>::GetExceptionMsg() {
+  if (executor_.get() != nullptr) {
+    return executor_->GetExceptionMsg();
+  }
+  return "";
+}
 
 #ifdef PADDLE_MOBILE_CPU
 template <>
@@ -442,6 +451,8 @@ double PaddleMobile<GPU_CL, float>::GetPredictTime() {
   int input_height = 224;
   int output_width = 224;
   int output_height = 224;
+  int has_group = 0;
+  int filter_channel = 3;
   status = clSetKernelArg(kernel, 0, sizeof(int), &c_block);
   CL_CHECK_ERRORS(status);
   status = clSetKernelArg(kernel, 1, sizeof(int), &w);
@@ -469,6 +480,10 @@ double PaddleMobile<GPU_CL, float>::GetPredictTime() {
   status = clSetKernelArg(kernel, 12, sizeof(int), &output_width);
   CL_CHECK_ERRORS(status);
   status = clSetKernelArg(kernel, 13, sizeof(int), &output_height);
+  CL_CHECK_ERRORS(status);
+  status = clSetKernelArg(kernel, 14, sizeof(int), &filter_channel);
+  CL_CHECK_ERRORS(status);
+  status = clSetKernelArg(kernel, 15, sizeof(int), &has_group);
   CL_CHECK_ERRORS(status);
 
   //  cl_event out_event = param.Output()->GetClEvent();

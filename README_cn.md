@@ -51,8 +51,12 @@ Paddle Lite 借鉴了以下开源项目：
 - [ARM compute library]((https://github.com/ARM-software/ComputeLibrary))
 - [Anakin](https://github.com/PaddlePaddle/Anakin) ，Anakin对应底层的一些优化实现已被集成到Paddle Lite。Anakin作为PaddlePaddle组织下的一个高性能预测项目，极具前瞻性，对Paddle Lite有重要贡献。Anakin已和本项目实现整合。之后，Anakin不再升级。
 
-
 ##  交流与反馈
 * 欢迎您通过Github Issues来提交问题、报告与建议
+* 微信公众号：飞桨PaddlePaddle
 * QQ群: 696965088 
+
+<p align="center"><img width="200" height="200"  src="https://user-images.githubusercontent.com/45189361/64117959-1969de80-cdc9-11e9-84f7-e1c2849a004c.jpeg"/>&#8194;&#8194;&#8194;&#8194;&#8194;<img width="200" height="200" margin="500" src="https://user-images.githubusercontent.com/45189361/64117844-cb54db00-cdc8-11e9-8c08-24bbe594608e.jpeg"/></p>
+<p align="center">  &#8194;&#8194;&#8194;微信公众号&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;&#8194;官方技术交流QQ群</p>
+
 * 论坛: 欢迎大家在[PaddlePaddle论坛](https://ai.baidu.com/forum/topic/list/168)分享在使用PaddlePaddle中遇到的问题和经验, 营造良好的论坛氛围

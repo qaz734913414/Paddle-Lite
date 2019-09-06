@@ -29,10 +29,16 @@ DEFINE_string(model_dir, "", "model_dir");
 namespace paddle {
 namespace lite {
 
-TEST(SubgraphTest, mobilenetv1) {
+TEST(SubgraphTest, models) {
   cpp::ProgramDesc program_desc;
   auto scope = std::make_shared<Scope>();
-  LoadModelPb(FLAGS_model_dir, scope.get(), &program_desc);
+  // LoadModelPb(FLAGS_model_dir,
+  //             FLAGS_model_dir + "/model",
+  //             FLAGS_model_dir + "/params",
+  //             scope.get(),
+  //             &program_desc,
+  //             true);
+  LoadModelPb(FLAGS_model_dir, "", "", scope.get(), &program_desc);
   std::vector<Place> valid_places({
       Place{TARGET(kHost), PRECISION(kFloat)},
 #ifdef LITE_WITH_ARM
@@ -46,7 +52,8 @@ TEST(SubgraphTest, mobilenetv1) {
   auto graph = std::unique_ptr<mir::SSAGraph>(new mir::SSAGraph());
   graph->Build(program, valid_places);
 
-  std::vector<std::string> supported_op_types{"conv2d",
+  std::vector<std::string> supported_op_types{"concat",
+                                              "conv2d",
                                               "depthwise_conv2d",
                                               "batch_norm",
                                               "scale",
@@ -54,9 +61,13 @@ TEST(SubgraphTest, mobilenetv1) {
                                               "mul",
                                               "elementwise_add",
                                               "softmax",
-                                              "relu"};
+                                              "split",
+                                              "relu",
+                                              "reshape2",
+                                              "transpose2"};
   auto* pass = new mir::subgraph::SubgraphProgramPass;
   ASSERT_EQ(pass->FuseSubgraph(graph, supported_op_types), 1);
+  LOG(INFO) << "After NPU Pass \n" << Visualize(graph.get());
 }
 
 // return output_var_names
@@ -99,6 +110,77 @@ std::vector<std::string> AddFCDesc(
   return out_var_names;
 }
 
+std::vector<std::string> AddElementwiseAddDesc(
+    cpp::BlockDesc* block_desc,
+    const std::shared_ptr<Scope>& scope,
+    const std::vector<std::string>& input_X_names,
+    const std::vector<std::string>& input_Y_names) {
+  // CHECK_EQ(input_var_names.size(), 2);
+  static int id = 0;
+  std::string prefix = "elementwise_add_" + std::to_string(id);
+  auto* op_desc = block_desc->AddOp<cpp::OpDesc>();
+  auto* out = block_desc->AddVar<cpp::VarDesc>();
+
+  out->SetName(prefix + "_Out");
+  std::vector<std::string> out_var_names{prefix + "_Out"};
+
+  scope->Var(prefix + "_Out")->GetMutable<lite::Tensor>();
+
+  op_desc->SetType("elementwise_add");
+  op_desc->SetInput("X", input_X_names);
+  op_desc->SetInput("Y", input_Y_names);
+  op_desc->SetOutput("Out", out_var_names);
+  op_desc->SetAttr("axis", -1);
+  id++;
+  return out_var_names;
+}
+
+std::vector<std::string> AddFeedDesc(
+    cpp::BlockDesc* block_desc,
+    const std::shared_ptr<Scope>& scope,
+    const std::vector<std::string>& input_X_names) {
+  // CHECK_EQ(input_var_names.size(), 1);
+  static int id = 0;
+  std::string prefix = "feed_" + std::to_string(id);
+  auto* op_desc = block_desc->AddOp<cpp::OpDesc>();
+  auto* out = block_desc->AddVar<cpp::VarDesc>();
+
+  out->SetName(prefix + "_Out");
+  std::vector<std::string> out_var_names{prefix + "_Out"};
+
+  scope->Var(prefix + "_Out")->GetMutable<lite::Tensor>();
+
+  op_desc->SetType("feed");
+  op_desc->SetInput("X", input_X_names);
+  op_desc->SetOutput("Out", out_var_names);
+  op_desc->SetAttr("col", 1);
+  id++;
+  return out_var_names;
+}
+
+std::vector<std::string> AddFetchDesc(
+    cpp::BlockDesc* block_desc,
+    const std::shared_ptr<Scope>& scope,
+    const std::vector<std::string>& input_X_names) {
+  // CHECK_EQ(input_var_names.size(), 1);
+  static int id = 0;
+  std::string prefix = "fetch_" + std::to_string(id);
+  auto* op_desc = block_desc->AddOp<cpp::OpDesc>();
+  auto* out = block_desc->AddVar<cpp::VarDesc>();
+
+  out->SetName(prefix + "_Out");
+  std::vector<std::string> out_var_names{prefix + "_Out"};
+
+  scope->Var(prefix + "_Out")->GetMutable<lite::Tensor>();
+
+  op_desc->SetType("fetch");
+  op_desc->SetInput("X", input_X_names);
+  op_desc->SetOutput("Out", out_var_names);
+  op_desc->SetAttr("col", 1);
+  id++;
+  return out_var_names;
+}
+
 std::unique_ptr<mir::SSAGraph> BuildSimpleNet(
     cpp::ProgramDesc* program_desc,
     const std::shared_ptr<Scope>& scope,
@@ -134,6 +216,7 @@ TEST(SubGraphTest, SimpleNet) {
 
   const int num_nodes = graph->nodes().size();
   ASSERT_EQ(graph->nodes().size(), 9);
+  // LOG(INFO) << "After NPU Pass \n" << Visualize(graph.get());
 }
 
 }  // namespace lite

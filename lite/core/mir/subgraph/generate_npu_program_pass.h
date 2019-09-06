@@ -17,12 +17,13 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "lite/backends/npu/bridge/registry.h"
+#include "lite/backends/npu/npu_helper.h"
 #include "lite/core/mir/pass.h"
 #include "lite/core/mir/subgraph/subgraph_program_pass.h"
-#include "lite/npu/bridge/registry.h"
-#include "lite/npu/npu_helper.h"
 
 namespace paddle {
 namespace lite {
@@ -37,23 +38,22 @@ class GenerateNPUProgramPass : public SubgraphProgramPass {
   std::unique_ptr<RuntimeProgram> GenProgram();
 
  protected:
-  // TODO(TJ): maybe change a name
-  // convert all fused subgraphs to npu clients
-  // 1. if some subgraph failed, then skip.
-  // 2. add new graph nodes, kernels and context
-  // 3. remove unused nodes
-  void ConvertSubgraph(const std::unique_ptr<SSAGraph>& graph, int sub_num);
+  // nodes2cvt: op nodes to convert
+  // return cvted_vars: converted var nodes
+  void CvtAllOpNodes(const std::vector<Node*>& nodes2cvt,
+                     lite::npu::bridge::node_map_type* cvted_vars);
 
-  // call convert function from start node
-  // return if convert success and the nodes to remove
-  // return the output(arg.name, npu op)
-  lite::npu::bridge::node_map_type CvtOpNodes(
-      const lite::npu::bridge::cvt_map_type& cvtfunc_map,
-      const Node* op_node,
-      const lite::npu::bridge::node_map_type& inputs_map,
-      int sub_id,
-      std::unordered_set<const Node*>* nodes2rm,
-      key2nodes_t* matched);
+  std::shared_ptr<ge::Operator> CvtVarNode(lite::mir::Node* var_node,
+                                           const Scope* scope);
+
+  std::string BuildNPUGraph(const std::unordered_set<Node*>& op_nodes,
+                            const std::unordered_set<Node*>& in_data_vars,
+                            const std::unordered_set<Node*>& out_data_vars,
+                            int sub_id);
+
+  void GenNPUSubgraph(const std::unique_ptr<SSAGraph>& graph,
+                      const std::unordered_set<Node*>& op_nodes,
+                      int sub_id);
 
  private:
   std::vector<Instruction> insts_;

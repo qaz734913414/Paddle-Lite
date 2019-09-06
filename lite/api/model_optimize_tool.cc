@@ -23,7 +23,12 @@
 #include "lite/utils/cp_logging.h"
 #include "lite/utils/string.h"
 
-DEFINE_string(model_dir, "", "path of the model");
+DEFINE_string(model_dir,
+              "",
+              "path of the model. This option will be ignored if model_file "
+              "and param_file are exist");
+DEFINE_string(model_file, "", "model file path of the combined-param model");
+DEFINE_string(param_file, "", "param file path of the combined-param model");
 DEFINE_string(
     optimize_out_type,
     "protobuf",
@@ -33,14 +38,21 @@ DEFINE_string(valid_targets,
               "arm",
               "The targets this model optimized for, should be one of (arm, "
               "opencl, x86), splitted by space");
-DEFINE_bool(int8_mode, false, "Support Int8 quantitative mode");
+DEFINE_bool(prefer_int8_kernel, false, "Prefer to run model with int8 kernels");
 
 namespace paddle {
 namespace lite_api {
 
 void Main() {
+  if (!FLAGS_model_file.empty() && !FLAGS_param_file.empty()) {
+    LOG(WARNING)
+        << "Load combined-param model. Option model_dir will be ignored";
+  }
+
   lite_api::CxxConfig config;
   config.set_model_dir(FLAGS_model_dir);
+  config.set_model_file(FLAGS_model_file);
+  config.set_param_file(FLAGS_param_file);
 
   std::vector<Place> valid_places;
   auto target_reprs = lite::Split(FLAGS_valid_targets, " ");
@@ -62,7 +74,7 @@ void Main() {
   CHECK(!valid_places.empty())
       << "At least one target should be set, should set the "
          "command argument 'valid_targets'";
-  if (FLAGS_int8_mode) {
+  if (FLAGS_prefer_int8_kernel) {
     LOG(WARNING) << "Int8 mode is only support by ARM target";
     valid_places.push_back(Place{TARGET(kARM), PRECISION(kInt8)});
     config.set_preferred_place(Place{TARGET(kARM), PRECISION(kInt8)});

@@ -8,7 +8,7 @@ if (WITH_TESTING)
     lite_cc_library(lite_api_test_helper SRCS lite_api_test_helper.cc
       DEPS scope optimizer target_wrapper_host model_parser program
            ${ops} ${host_kernels}
-      CUDA_DEPS kernels_cuda
+      CUDA_DEPS ${cuda_kernels}
       X86_DEPS ${x86_kernels})
 endif()
 if(LITE_WITH_FPGA)
@@ -17,6 +17,7 @@ if(LITE_WITH_FPGA)
 endif()
 
 message(STATUS "get ops ${ops}")
+message(STATUS "get X86 kernels ${x86_kernels}")
 message(STATUS "get Host kernels ${host_kernels}")
 message(STATUS "get ARM kernels ${arm_kernels}")
 message(STATUS "get NPU kernels ${npu_kernels}")
@@ -26,11 +27,6 @@ message(STATUS "get FPGA kernels ${fpga_kernels}")
 if (NOT LITE_ON_TINY_PUBLISH)
     set(cxx_api_deps
       scope optimizer target_wrapper_host model_parser program)
-    if(LITE_WITH_CUDA)
-        set(cxx_api_deps ${cxx_api_deps} kernels_cuda)
-        lite_cc_library(cxx_api_cuda SRCS cxx_api.cc DEPS ${cxx_api_deps} target_wrapper_cuda)
-        nv_test(test_cxx_api_cuda SRCS cxx_api_test.cc DEPS cxx_api_cuda)
-    endif()
     lite_cc_library(cxx_api
                     SRCS cxx_api.cc
                     DEPS ${cxx_api_deps} ${ops} ${host_kernels} program
@@ -50,7 +46,7 @@ endif()
 lite_cc_library(light_api SRCS light_api.cc
         DEPS scope target_wrapper_host model_parser
             ${light_api_deps} ${ops} ${host_kernels} program
-        CUDA_DEPS target_wrapper_cuda
+        CUDA_DEPS ${cuda_kernels}
         X86_DEPS ${x86_kernels}
         ARM_DEPS ${arm_kernels}
         NPU_DEPS ${npu_kernels} ${npu_bridges} npu_pass
@@ -104,7 +100,7 @@ if(LITE_WITH_LIGHT_WEIGHT_FRAMEWORK AND WITH_TESTING)
     lite_cc_test(test_mobilenetv1_int8 SRCS mobilenetv1_int8_test.cc
        DEPS ${lite_model_test_DEPS}
        CL_DEPS ${opencl_kernels}
-       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/opencl
+       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/backends/opencl
         --model_dir=${LITE_MODEL_DIR}/MobilenetV1_quant SERIAL)
     add_dependencies(test_mobilenetv1_int8 extern_lite_download_MobileNetV1_quant_tar_gz)
 
@@ -112,25 +108,25 @@ if(LITE_WITH_LIGHT_WEIGHT_FRAMEWORK AND WITH_TESTING)
        DEPS ${lite_model_test_DEPS}
        CL_DEPS ${opencl_kernels}
        NPU_DEPS ${npu_kernels} ${npu_bridges}
-       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/opencl
+       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/backends/opencl
             --model_dir=${LITE_MODEL_DIR}/mobilenet_v1 SERIAL)
     add_dependencies(test_mobilenetv1 extern_lite_download_mobilenet_v1_tar_gz)
     set(LINK_FLAGS "-Wl,--version-script ${PADDLE_SOURCE_DIR}/lite/core/lite.map")
     set_target_properties(test_mobilenetv1 PROPERTIES LINK_FLAGS "${LINK_FLAGS}")
-    
+
     lite_cc_test(test_mobilenetv2 SRCS mobilenetv2_test.cc
        DEPS ${lite_model_test_DEPS}
        CL_DEPS ${opencl_kernels}
-       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/opencl
+       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/backends/opencl
             --model_dir=${LITE_MODEL_DIR}/mobilenet_v2_relu SERIAL)
     add_dependencies(test_mobilenetv2 extern_lite_download_mobilenet_v2_relu_tar_gz)
     set_target_properties(test_mobilenetv2 PROPERTIES LINK_FLAGS "${LINK_FLAGS}")
-    
+
     lite_cc_test(test_resnet50 SRCS resnet50_test.cc
-       DEPS ${lite_model_test_DEPS}
+       DEPS ${lite_model_test_DEPS} paddle_api_light
        CL_DEPS ${opencl_kernels}
        FPGA_DEPS ${fpga_kernels}
-       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/opencl
+       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/backends/opencl
             --model_dir=${LITE_MODEL_DIR}/resnet50 SERIAL)
     add_dependencies(test_resnet50 extern_lite_download_resnet50_tar_gz)
 
@@ -142,11 +138,16 @@ if(LITE_WITH_LIGHT_WEIGHT_FRAMEWORK AND WITH_TESTING)
     lite_cc_test(test_inceptionv4 SRCS inceptionv4_test.cc
        DEPS ${lite_model_test_DEPS}
        CL_DEPS ${opencl_kernels}
-       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/opencl
+       ARGS --cl_path=${CMAKE_SOURCE_DIR}/lite/backends/opencl
             --model_dir=${LITE_MODEL_DIR}/inception_v4 SERIAL)
-    add_dependencies(test_inceptionv4 extern_lite_download_inception_v4_simple_tar_gz)    
-#    lite_cc_test(test_ocr_attention SRCS ocr_attention_test.cc
-#       DEPS ${lite_model_test_DEPS})
+    add_dependencies(test_inceptionv4 extern_lite_download_inception_v4_simple_tar_gz)
+   # lite_cc_test(test_ocr_attention SRCS ocr_attention_test.cc
+   #    DEPS ${lite_model_test_DEPS})
+
+   # lite_cc_test(model_run_test_image SRCS model_run_test_image.cc
+   #    DEPS ${lite_model_test_DEPS}
+   #    CL_DEPS ${opencl_kernels}
+   #    FPGA_DEPS ${fpga_kernels})
 endif()
 
 # These tests needs CLI arguments, and is not supported in ARM CI.
@@ -169,9 +170,13 @@ lite_cc_library(paddle_api SRCS paddle_api.cc DEPS op_params tensor)
 
 #-----------------------------------------------------------------------------------------------------
 # The final inference library for both CxxConfig and MobileConfig.
-lite_cc_library(paddle_api_light SRCS light_api_impl.cc DEPS light_api paddle_api)
+if (LITE_ON_TINY_PUBLISH)
+    lite_cc_library(paddle_api_light SRCS light_api_impl.cc DEPS light_api paddle_api stream)
+else()
+    lite_cc_library(paddle_api_light SRCS light_api_impl.cc DEPS light_api paddle_api)
+endif()
 if (NOT LITE_ON_TINY_PUBLISH)
-    lite_cc_library(paddle_api_full SRCS cxx_api_impl.cc DEPS cxx_api paddle_api light_api
+    lite_cc_library(paddle_api_full SRCS cxx_api_impl.cc DEPS cxx_api paddle_api_light
       ${ops}
       ARM_DEPS ${arm_kernels}
       NPU_DEPS ${npu_kernels}
@@ -205,6 +210,13 @@ endif()
 # Some bins
 if(NOT IOS)
   lite_cc_binary(test_model_bin SRCS model_test.cc DEPS paddle_api_full paddle_api_light gflags
+    ${ops}
+    ARM_DEPS ${arm_kernels}
+    NPU_DEPS ${npu_kernels}
+    CL_DEPS ${opencl_kernels}
+    FPGA_DEPS ${fpga_kernels}
+    X86_DEPS ${x86_kernels})
+  lite_cc_binary(benchmark_bin SRCS benchmark.cc DEPS paddle_api_full paddle_api_light gflags
     ${ops}
     ARM_DEPS ${arm_kernels}
     NPU_DEPS ${npu_kernels}

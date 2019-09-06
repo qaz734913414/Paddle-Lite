@@ -21,6 +21,16 @@ namespace paddle {
 namespace lite {
 namespace naive_buffer {
 
+std::string ParamDesc::Name() const {
+  return desc_->GetField<StringBuilder>("name").data();
+}
+
+void ParamDesc::SetName(const std::string& name) {
+  auto* build = desc_->GetMutableField<StringBuilder>("name");
+  CHECK(build);
+  build->set(name);
+}
+
 uint32_t ParamDesc::ModelVersion() const { return Version("model_version"); }
 
 void ParamDesc::SetModelVersion(uint32_t version) {
@@ -159,7 +169,7 @@ GET_DATA_IMPL(double, FP64);
 // NOTE: Must set data type first
 #define SET_DATA_COMMON_IMPL(T, type__, size__, data_ptr__)     \
   CHECK(GetDataType() == VarDescAPI::VarDataType::type__)       \
-      << "Data Type mismatch, Call SetDataType first";          \
+      << "Data Type mismatch, call SetDataType first.";         \
   auto* data_builder =                                          \
       desc_->GetMutableField<ListBuilder<CharBuilder>>("data"); \
   CHECK(data_builder);                                          \

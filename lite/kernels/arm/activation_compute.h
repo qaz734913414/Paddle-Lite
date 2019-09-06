@@ -102,6 +102,25 @@ class LogCompute : public KernelLite<TARGET(kARM), PRECISION(kFloat)> {
 
   virtual ~LogCompute() = default;
 };
+
+class ExpCompute : public KernelLite<TARGET(kARM), PRECISION(kFloat)> {
+ public:
+  using param_t = operators::ActivationParam;
+
+  void Run() override;
+
+  virtual ~ExpCompute() = default;
+};
+
+class FloorCompute : public KernelLite<TARGET(kARM), PRECISION(kFloat)> {
+ public:
+  using param_t = operators::ActivationParam;
+
+  void Run() override;
+
+  virtual ~FloorCompute() = default;
+};
+
 }  // namespace arm
 }  // namespace kernels
 }  // namespace lite

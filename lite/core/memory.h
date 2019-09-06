@@ -18,8 +18,12 @@
 #include "lite/utils/macros.h"
 
 #ifdef LITE_WITH_OPENCL
-#include "lite/opencl/target_wrapper.h"
+#include "lite/backends/opencl/target_wrapper.h"
 #endif  // LITE_WITH_OPENCL
+
+#ifdef LITE_WITH_CUDA
+#include "lite/backends/cuda/target_wrapper.h"
+#endif  // LITE_WITH_CUDA
 
 namespace paddle {
 namespace lite {
@@ -36,7 +40,7 @@ void LITE_API TargetFree(TargetType target, void* data);
 void TargetCopy(TargetType target, void* dst, const void* src, size_t size);
 
 template <TargetType Target>
-void CopySync(void* dst, void* src, size_t size, IoDirection dir) {
+void CopySync(void* dst, const void* src, size_t size, IoDirection dir) {
   switch (Target) {
     case TARGET(kX86):
     case TARGET(kHost):

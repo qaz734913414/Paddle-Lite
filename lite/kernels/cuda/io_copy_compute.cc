@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "lite/backends/cuda/target_wrapper.h"
 #include "lite/core/kernel.h"
 #include "lite/core/op_registry.h"
-#include "lite/cuda/target_wrapper.h"
 
 namespace paddle {
 namespace lite {
 namespace kernels {
 namespace cuda {
 
-using TargetW = TargetWrapper<TARGET(kCUDA), cudaStream_t, cudaEvent_t>;
+using TargetW = TargetWrapper<TARGET(kCUDA)>;
 
 // Host to CUDA memory.
 void CopyFromHostSync(void* target, const void* source, size_t size) {
@@ -89,7 +89,7 @@ class IoCopyCudaToHostCompute
     auto& param = Param<operators::IoCopyParam>();
     CHECK(param.x->target() == TARGET(kCUDA));
     auto mem_size = param.x->memory_size();
-    LOG(INFO) << "copy size " << mem_size;
+    LOG(INFO) << "io copy cuda to host " << mem_size;
     auto* data = param.y->mutable_data(TARGET(kHost), mem_size);
     CopyToHostSync(data, param.x->raw_data(), mem_size);
   }

@@ -10,7 +10,7 @@ model_path = "model"
 checked_model_path = "checked_model"
 feed_path = "feeds"
 output_path = "outputs"
-diff_threshold = 0.01
+diff_threshold = 0.1
 is_lod = False
 mobile_model_path = ""
 fast_check = False
@@ -19,6 +19,11 @@ sample_step = 1
 sample_num = 20
 need_encrypt = False
 checked_encrypt_model_path = "checked_encrypt_model"
+output_var_filter = []
+output_key_filter = {}
+check_shape = False
+architecture = "arm-v7a"
+# architecture = "arm-v8a"
 
 np.set_printoptions(linewidth=150)
 
@@ -282,6 +287,9 @@ def save_all_op_output(feed_kv=None):
     for fetch in fetches:
         fetch_names.append(fetch.name)
     feed_names = feeds
+    if len(output_var_filter) > 0:
+        for fetch_name in fetch_names:
+            output_var_filter.append(fetch_name)
     for i in range(len(ops)):
         op = ops[i]
         var_name = None
@@ -297,6 +305,53 @@ def save_all_op_output(feed_kv=None):
                 var_name = name
                 if "tmp" in name:
                     break
+        if len(output_var_filter) > 0:
+            if var_name not in output_var_filter:
+                continue
+        # real_var_name = None
+        # if op.type == "fetch":
+        #     for name in op.input_arg_names:
+        #         real_var_name = name
+        #         if "tmp" in name:
+        #             break
+        # else:
+        #     real_var_name = var_name
+        if fast_check:
+            if var_name not in fetch_names and var_name not in feed_names:
+                continue
+        try:
+            data = get_var_data(var_name, feed_kv=feed_kv).flatten().tolist()
+            sample = tensor_sample(data)
+            output_var_cache[var_name] = (sample)
+            op_cache[i] = (var_name, op)
+            file_name = var_name.replace("/", "_")
+            out_file = open(output_path + "/" + file_name, "w")
+            if var_name in feed_names:
+                for item in data:
+                    out_file.write("{}\n".format(item))
+            else:
+                for item in sample:
+                    out_file.write("{}\n".format(item))
+            out_file.close()
+        except:
+            pass
+    for i in range(len(ops)):
+        op = ops[i]
+        if op.type not in output_key_filter:
+            continue
+        var_name = None
+        var_name_index = -1
+        for index in range(len(op.output_names)):
+            if op.output_names[index] in output_key_filter[op.type]:
+                var_name_index = index
+                break
+        if var_name_index != -1:
+            var_name = op.output_arg_names[var_name_index]
+        else:
+            continue
+        if len(output_var_filter) > 0:
+            if var_name not in output_var_filter:
+                continue
         # real_var_name = None
         # if op.type == "fetch":
         #     for name in op.input_arg_names:
@@ -384,14 +439,23 @@ def check_mobile_results(args, fuse, mem_opt):
             continue
         if not op_output_var_name in mobile_var_cache:
             continue
+        if op_output_var_name not in fetch_names:
+            continue
         values1 = output_var_cache[op_output_var_name]
         values2 = mobile_var_cache[op_output_var_name]
-        if len(values1) != len(values2):
+        shape = get_var_shape(op_output_var_name) if check_shape else []
+        if len(values1) + len(shape) != len(values2):
             error_index = index
+        for i in range(len(shape)):
+            v1 = shape[i]
+            v2 = values2[i]
+            if v1 != v2:
+                error_index = index
+                break
         if error_index == None:
             for i in range(len(values1)):
                 v1 = values1[i]
-                v2 = values2[i]
+                v2 = values2[len(shape) + i]
                 if abs(v1 - v2) > diff_threshold:
                     error_index = index
                     break
@@ -413,12 +477,79 @@ def check_mobile_results(args, fuse, mem_opt):
         error_values1 = np.array(error_values1)
         error_values2 = np.array(error_values2)
         # pp_red("mobile op is not correct, error occurs at {}th op, op's type is {}")
-        pp_red("corresponding fluid op is {}th op, op's type is {}, wrong var name is {}".format(
-            error_index,op_cache[error_index][1].type,op_output_var_name), 1)
+        pp_red("outputs are incorrect", 1)
         pp_red("fluid results are : ", 1)
         pp_red(str(error_values1).replace("\n", "\n" + "\t" * 1), 1)
         pp_yellow("paddle mobile results are : ", 1)
         pp_red(str(error_values2).replace("\n", "\n" + "\t" * 1), 1)
+        if not fuse and not mem_opt:
+            pp_yellow("checking individual ops : ", 1)
+            error_index = None
+            error_values1 = None
+            error_values2 = None
+            checked_names = []
+            fetch_names = []
+            for fetch in fetches:
+                fetch_names.append(fetch.name)
+            for index in op_cache:
+                op_output_var_name, op = op_cache[index]
+                if mem_opt:
+                    found_in_fetch = False
+                    for fetch in fetches:
+                        if op_output_var_name == fetch.name:
+                            found_in_fetch = True
+                            break
+                    if not found_in_fetch:
+                        continue
+                if not op_output_var_name in output_var_cache:
+                    continue
+                if not op_output_var_name in mobile_var_cache:
+                    continue
+                if fuse or mem_opt:
+                    if op_output_var_name not in fetch_names:
+                        continue
+                values1 = output_var_cache[op_output_var_name]
+                values2 = mobile_var_cache[op_output_var_name]
+                shape = get_var_shape(op_output_var_name) if check_shape else []
+                if len(values1) + len(shape) != len(values2):
+                    error_index = index
+                for i in range(len(shape)):
+                    v1 = shape[i]
+                    v2 = values2[i]
+                    if v1 != v2:
+                        error_index = index
+                        break
+                if error_index == None:
+                    for i in range(len(values1)):
+                        v1 = values1[i]
+                        v2 = values2[len(shape) + i]
+                        if abs(v1 - v2) > diff_threshold:
+                            error_index = index
+                            break
+                checked_names.append(op_output_var_name)
+                if error_index != None:
+                    error_values1 = values1
+                    error_values2 = values2
+                    break
+            if error_index == None:
+                for name in fetch_names:
+                    if name not in checked_names:
+                        error_index = -1
+                        break
+            if error_index == None:
+                pp_green("outputs are all correct", 1)
+            elif error_index == -1:
+                pp_red("outputs are missing")
+            else:
+                error_values1 = np.array(error_values1)
+                error_values2 = np.array(error_values2)
+                # pp_red("mobile op is not correct, error occurs at {}th op, op's type is {}")
+                pp_red("corresponding fluid op is {}th op, op's type is {}, wrong var name is {}".format(
+                    error_index,op_cache[error_index][1].type,op_output_var_name), 1)
+                pp_red("fluid results are : ", 1)
+                pp_red(str(error_values1).replace("\n", "\n" + "\t" * 1), 1)
+                pp_yellow("paddle mobile results are : ", 1)
+                pp_red(str(error_values2).replace("\n", "\n" + "\t" * 1), 1)
     # print(output_var_cache)
     # print(mobile_var_cache)
 
@@ -475,7 +606,8 @@ def main():
     pp_yellow(dot + " start inspecting paddle mobile correctness & performance")
     push(checked_model_path)
     push(feed_path + "/" + last_feed_file_name, "input.txt")
-    push(mobile_src_root + "/build/release/arm-v7a/build/libpaddle-mobile.so")
+    push(mobile_src_root + "/build/release/{}/build/libpaddle-mobile.so".format(architecture))
+    push(mobile_src_root + "/build/release/{}/build/cl_kernel".format(architecture))
     push(mobile_src_root + "/test/build/test-net")
     last_feed_var_shape = get_feed_var_shape(last_feed_var_name)
     args = str(len(last_feed_var_shape))
@@ -496,6 +628,7 @@ def main():
         args += " " + str(sample_num)
     for var_name in output_var_cache.keys():
         args += " " + var_name
+    args += " " + str(1 if check_shape else 0)
     if not fast_check:
         check_mobile_results(args, False, False)
         check_mobile_results(args, False, True)

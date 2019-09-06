@@ -14,7 +14,7 @@
 
 #include "lite/kernels/arm/conv_transpose_compute.h"
 #include <vector>
-#include "lite/arm/math/funcs.h"
+#include "lite/backends/arm/math/funcs.h"
 #include "lite/core/op_registry.h"
 #include "lite/core/type_system.h"
 
@@ -157,8 +157,8 @@ REGISTER_LITE_KERNEL(conv2d_transpose,
                      kNCHW,
                      paddle::lite::kernels::arm::Conv2DTransposeCompute,
                      def)
-    .BindInput("x", {LiteType::GetTensorTy(TARGET(kARM))})
-    .BindInput("bias", {LiteType::GetTensorTy(TARGET(kARM))})
-    .BindInput("filter", {LiteType::GetTensorTy(TARGET(kARM))})
-    .BindOutput("output", {LiteType::GetTensorTy(TARGET(kARM))})
+    .BindInput("Input", {LiteType::GetTensorTy(TARGET(kARM))})
+    .BindInput("Bias", {LiteType::GetTensorTy(TARGET(kARM))})
+    .BindInput("Filter", {LiteType::GetTensorTy(TARGET(kARM))})
+    .BindOutput("Output", {LiteType::GetTensorTy(TARGET(kARM))})
     .Finalize();

@@ -67,18 +67,27 @@ bool InterpolateOp::InferShape() const {
 
 bool InterpolateOp::AttachImpl(const cpp::OpDesc& op_desc, lite::Scope* scope) {
   auto X = op_desc.Input("X").front();
-  if (op_desc.Input("OutSize").size() > 0) {
-    auto OutSize = op_desc.Input("OutSize").front();
-    param_.OutSize = scope->FindVar(OutSize)->GetMutable<lite::Tensor>();
+  if (op_desc.HasInput("OutSize")) {
+    auto out_size_var_names = op_desc.Input("OutSize");
+    if (out_size_var_names.size() > 0) {
+      param_.OutSize = scope->FindVar(out_size_var_names.front())
+                           ->GetMutable<lite::Tensor>();
+    }
   } else {
     param_.OutSize = nullptr;
   }
   auto Out = op_desc.Output("Out").front();
   param_.X = scope->FindVar(X)->GetMutable<lite::Tensor>();
   param_.Out = scope->FindVar(Out)->GetMutable<lite::Tensor>();
-  param_.scale = op_desc.GetAttr<float>("scale");
-  param_.out_w = op_desc.GetAttr<int>("out_w");
-  param_.out_h = op_desc.GetAttr<int>("out_h");
+  if (op_desc.HasAttr("scale")) {
+    param_.scale = op_desc.GetAttr<float>("scale");
+  }
+  if (op_desc.HasAttr("out_w")) {
+    param_.out_w = op_desc.GetAttr<int>("out_w");
+  }
+  if (op_desc.HasAttr("out_h")) {
+    param_.out_h = op_desc.GetAttr<int>("out_h");
+  }
   param_.align_corners = op_desc.GetAttr<bool>("align_corners");
   param_.interp_method = op_desc.GetAttr<std::string>("interp_method");
   return true;
